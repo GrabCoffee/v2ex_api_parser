@@ -224,9 +224,28 @@ class V2exParser {
             // 提取回复内容（保持原始换行格式）
             const replyContentElement = $el.find('.reply_content');
             let replyContent = '';
+            let replyContentHtml = '';
+            let replyImages = [];
+
             if (replyContentElement.length > 0) {
+                // 保存原始HTML内容
+                replyContentHtml = replyContentElement.html();
+
+                // 提取图片信息
+                replyContentElement.find('img').each((index, imgElement) => {
+                    const $img = $(imgElement);
+                    const imgSrc = $img.attr('src');
+                    const imgAlt = $img.attr('alt') || '';
+                    if (imgSrc) {
+                        replyImages.push({
+                            src: imgSrc,
+                            alt: imgAlt
+                        });
+                    }
+                });
+
                 // 将HTML内容转换为文本，但保持换行符
-                replyContent = replyContentElement.html()
+                replyContent = replyContentHtml
                     .replace(/<br\s*\/?>/gi, '\n')  // 将 <br> 标签转换为换行符
                     .replace(/<[^>]*>/g, '')        // 移除其他HTML标签
                     .replace(/&nbsp;/g, ' ')        // 转换HTML实体
@@ -251,7 +270,8 @@ class V2exParser {
             // 提取回复中的Solana地址和域名
             const solanaInfo = this.extractSolanaAddressesFromText(replyContent);
 
-            if (replyContent) {
+            // 修改条件：即使内容为空，如果有图片也应该包含这个回复
+            if (replyContent || replyImages.length > 0) {
                 replies.push({
                     id: replyId,
                     floor: replyFloor,
@@ -261,6 +281,8 @@ class V2exParser {
                         avatar: replyAuthorAvatar
                     },
                     content: replyContent,
+                    contentHtml: replyContentHtml,
+                    images: replyImages,
                     time: replyTime,
                     device: device,
                     solanaAddresses: solanaInfo.solanaAddresses,
@@ -401,8 +423,27 @@ class V2exParser {
                             // 提取回复内容（保持原始换行格式）
                             const replyContentElement = $el.find('.reply_content');
                             let replyContent = '';
+                            let replyContentHtml = '';
+                            let replyImages = [];
+
                             if (replyContentElement.length > 0) {
-                                replyContent = replyContentElement.html()
+                                // 保存原始HTML内容
+                                replyContentHtml = replyContentElement.html();
+
+                                // 提取图片信息
+                                replyContentElement.find('img').each((index, imgElement) => {
+                                    const $img = $page(imgElement);
+                                    const imgSrc = $img.attr('src');
+                                    const imgAlt = $img.attr('alt') || '';
+                                    if (imgSrc) {
+                                        replyImages.push({
+                                            src: imgSrc,
+                                            alt: imgAlt
+                                        });
+                                    }
+                                });
+
+                                replyContent = replyContentHtml
                                     .replace(/<br\s*\/?>/gi, '\n')
                                     .replace(/<[^>]*>/g, '')
                                     .replace(/&nbsp;/g, ' ')
@@ -421,7 +462,8 @@ class V2exParser {
 
                             const solanaInfo = this.extractSolanaAddressesFromText(replyContent);
 
-                            if (replyContent) {
+                            // 修改条件：即使内容为空，如果有图片也应该包含这个回复
+                            if (replyContent || replyImages.length > 0) {
                                 pageReplies.push({
                                     id: replyId,
                                     floor: replyFloor,
@@ -431,6 +473,8 @@ class V2exParser {
                                         avatar: replyAuthorAvatar
                                     },
                                     content: replyContent,
+                                    contentHtml: replyContentHtml,
+                                    images: replyImages,
                                     time: replyTime,
                                     device: device,
                                     solanaAddresses: solanaInfo.solanaAddresses,
@@ -864,6 +908,7 @@ class V2exParser {
      * 批量解析用户名信息
      * @param {Array<string>} usernames - 用户名数组
      * @param {Object} options - 解析选项
+     * @param {Function} options.onProgress - 进度回调函数，参数为 {currentIndex, totalUsers, username, status, message }
      * @returns {Promise<Array>} 用户信息数组
      */
     async parseMultipleUsers(usernames, options = {}) {
@@ -877,7 +922,8 @@ class V2exParser {
             timeout: 10000,
             delay: 1000, // 请求间隔延迟（毫秒）
             retryCount: 2, // 失败重试次数
-            showProgress: true // 是否显示进度
+            showProgress: true, // 是否显示进度
+            onProgress: null // 进度回调函数
         };
 
         const finalOptions = { ...defaultOptions, ...options };
@@ -888,6 +934,17 @@ class V2exParser {
 
             if (finalOptions.showProgress) {
                 console.log(`📊 进度: ${currentIndex}/${totalUsers} - 正在解析用户: ${username}`);
+            }
+
+            // 调用进度回调
+            if (finalOptions.onProgress && typeof finalOptions.onProgress === 'function') {
+                finalOptions.onProgress({
+                    currentIndex,
+                    totalUsers,
+                    username,
+                    status: 'start',
+                    message: `开始解析用户: ${username}`
+                });
             }
 
             let retryAttempts = 0;
@@ -910,6 +967,18 @@ class V2exParser {
                         console.log(`✅ 用户 ${username} 解析成功`);
                     }
 
+                    // 调用进度回调 - 成功
+                    if (finalOptions.onProgress && typeof finalOptions.onProgress === 'function') {
+                        finalOptions.onProgress({
+                            currentIndex,
+                            totalUsers,
+                            username,
+                            status: 'success',
+                            message: `用户 ${username} 解析成功`,
+                            userInfo: userInfo
+                        });
+                    }
+
                 } catch (error) {
                     retryAttempts++;
 
@@ -917,11 +986,33 @@ class V2exParser {
                         if (finalOptions.showProgress) {
                             console.log(`⚠️ 用户 ${username} 解析失败，第 ${retryAttempts} 次重试...`);
                         }
+
+                        // 调用进度回调 - 重试
+                        if (finalOptions.onProgress && typeof finalOptions.onProgress === 'function') {
+                            finalOptions.onProgress({
+                                currentIndex,
+                                totalUsers,
+                                username,
+                                status: 'retry',
+                                message: `用户 ${username} 解析失败，第 ${retryAttempts} 次重试...`
+                            });
+                        }
                         // 重试前等待一段时间
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     } else {
                         if (finalOptions.showProgress) {
                             console.log(`❌ 用户 ${username} 解析最终失败: ${error.message}`);
+                        }
+
+                        // 调用进度回调 - 最终失败
+                        if (finalOptions.onProgress && typeof finalOptions.onProgress === 'function') {
+                            finalOptions.onProgress({
+                                currentIndex,
+                                totalUsers,
+                                username,
+                                status: 'error',
+                                message: `用户 ${username} 解析最终失败: ${error.message}`
+                            });
                         }
 
                         results.push({
@@ -949,6 +1040,17 @@ class V2exParser {
         console.log(`✅ 成功: ${successCount} 个`);
         console.log(`❌ 失败: ${failureCount} 个`);
         console.log(`📈 成功率: ${((successCount / totalUsers) * 100).toFixed(2)}%`);
+
+        // 调用进度回调 - 完成
+        if (finalOptions.onProgress && typeof finalOptions.onProgress === 'function') {
+            finalOptions.onProgress({
+                currentIndex: totalUsers,
+                totalUsers,
+                username: null,
+                status: 'complete',
+                message: `批量解析完成！成功: ${successCount} 个，失败: ${failureCount} 个，成功率: ${((successCount / totalUsers) * 100).toFixed(2)}%`
+            });
+        }
 
         return results;
     }

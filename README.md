@@ -99,6 +99,40 @@ const results = await parser.parseMultipleUsers(usernames, {
 });
 ```
 
+### 批量用户解析（带进度回调）
+
+```javascript
+const usernames = ["user1", "user2", "user3"];
+const results = await parser.parseMultipleUsers(usernames, {
+  timeout: 15000,
+  delay: 1000,
+  retryCount: 2,
+  showProgress: true,
+  onProgress: (progressInfo) => {
+    const { currentIndex, totalUsers, username, status, message, userInfo } =
+      progressInfo;
+
+    switch (status) {
+      case "start": // 开始解析用户
+      case "success": // 解析成功
+      case "retry": // 重试中
+      case "error": // 最终失败
+      case "complete": // 全部完成
+        console.log(`[${currentIndex}/${totalUsers}] ${message}`);
+        break;
+    }
+  },
+});
+```
+
+**进度回调参数说明：**
+
+- `currentIndex`: 当前处理的用户索引（从 1 开始）
+- `totalUsers`: 总用户数量
+- `username`: 当前处理的用户名
+- `status`: 状态（start/success/retry/error/complete）
+- `message`: 状态描述信息
+
 ### 设置基础 URL
 
 ```javascript
