@@ -206,6 +206,9 @@ class V2exParser {
             }
         });
 
+        // 提取打赏（patronage）信息
+        const patronageInfo = this.extractPatronageInfo($);
+
         // 提取回复人ID数组（从JavaScript代码中）
         const replyUserIds = this.extractReplyUserIds($);
 
@@ -306,6 +309,7 @@ class V2exParser {
             clickCount: clickCount,
             content: content,
             tags: tags,
+            patronage: patronageInfo,
             replyUserIds: replyUserIds,
             replies: replies,
             statistics: {
@@ -316,6 +320,62 @@ class V2exParser {
         };
 
         return postInfo;
+    }
+
+    /**
+     * 提取帖子打赏（patronage）信息
+     * @param {Object} $ - cheerio对象
+     * @returns {Object} patronage信息 { users: [{username, id, profileUrl, avatar}], count, summaryText, totals: { totalPatrons, totalAmount } }
+     */
+    extractPatronageInfo($) {
+        const users = [];
+        const self = this;
+
+        // 头像列表（支持者）
+        $('.patronage a[href*="/member/"]').each((i, el) => {
+            const $a = $(el);
+            const href = $a.attr('href') || '';
+            const id = href.replace('/member/', '').trim();
+            const username = id; // V2EX 的 member 路径就是用户名
+            const avatar = $a.find('img').attr('src') || '';
+            if (id) {
+                users.push({
+                    username,
+                    id,
+                    profileUrl: self.baseUrl ? `${self.baseUrl}${href}` : href,
+                    avatar
+                });
+            }
+        });
+
+        // 汇总文案与数值，例如："ElevenQAQ、rawburuser 等 39 位会员一共打赏了 800 $V2EX"
+        const summaryText = ($('.tip-summary').first().text() || '').trim();
+
+        // 尝试解析人数与总额
+        let totalPatrons = null;
+        let totalAmount = null;
+        if (summaryText) {
+            const patronsMatch = summaryText.match(/等\s*(\d+)\s*位会员/);
+            if (patronsMatch) {
+                totalPatrons = parseInt(patronsMatch[1], 10);
+            }
+            const amountMatch = summaryText.match(/打赏了\s*([\d.]+)\s*\$V2EX/i);
+            if (amountMatch) {
+                // 保留数值字符串，或转为数字
+                const num = Number(amountMatch[1]);
+                totalAmount = isNaN(num) ? amountMatch[1] : num;
+            }
+        }
+
+        return {
+            users,
+            count: users.length,
+            summaryText,
+            totals: {
+                totalPatrons,
+                totalAmount
+            }
+        };
     }
 
     /**
