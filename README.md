@@ -9,6 +9,7 @@
 - 支持多页帖子抓取
 - 批量用户信息解析
 - 提取 Solana 地址信息
+- 支持解析帖子打赏（patronage）信息
 - 保持原始换行格式
 - 支持 ES Module 和 CommonJS
 
@@ -74,6 +75,15 @@ console.log(postInfo);
 //   title: '帖子标题',
 //   author: {...},
 //   content: '帖子内容',
+//   patronage: {
+//     users: [{username, id, profileUrl, avatar}, ...],
+//     count: 39,
+//     summaryText: 'ElevenQAQ、rawburuser 等 39 位会员一共打赏了 800 $V2EX',
+//     totals: {
+//       totalPatrons: 39,
+//       totalAmount: 800
+//     }
+//   },
 //   replies: [...],
 //   statistics: {...}
 // }
@@ -139,6 +149,33 @@ const results = await parser.parseMultipleUsers(usernames, {
 parser.setBaseUrl("https://global.v2ex.co");
 ```
 
+### 解析帖子打赏信息
+
+V2EX 新增的主题打赏功能，会在帖子页面显示打赏用户头像和汇总信息，解析器会自动提取这些信息：
+
+```javascript
+const postInfo = await parser.parsePost("1159225");
+
+// 打赏信息
+console.log('打赏用户数量:', postInfo.patronage.count);
+console.log('总打赏人数:', postInfo.patronage.totals.totalPatrons);
+console.log('总打赏金额:', postInfo.patronage.totals.totalAmount);
+console.log('汇总文案:', postInfo.patronage.summaryText);
+
+// 前5位打赏用户信息
+postInfo.patronage.users.slice(0, 5).forEach(user => {
+  console.log(`${user.username} - ${user.avatar}`);
+});
+```
+
+**打赏信息数据结构：**
+
+- `users`: 打赏用户列表，包含用户名、ID、头像和个人主页链接
+- `count`: 头像列表中的用户数量
+- `summaryText`: 原始汇总文案
+- `totals.totalPatrons`: 从汇总文案中提取的总打赏人数
+- `totals.totalAmount`: 从汇总文案中提取的总打赏金额
+
 ## 模块格式说明
 
 - **CommonJS**: `dist/index.js` - 适用于 Node.js 环境
@@ -158,6 +195,9 @@ npm run build:dev
 
 # 运行测试
 npm run test:all
+
+# 运行单独的打赏功能测试
+npm run test:patronage
 ```
 
 ## 许可证
