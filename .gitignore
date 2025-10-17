@@ -154,5 +154,4 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
-test/batch_users_result.json
-test/test_result_multi_page.json
+test/*
